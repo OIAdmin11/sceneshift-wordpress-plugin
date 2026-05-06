@@ -142,3 +142,4 @@ Before first submission you still need to:
      `== Screenshots ==` block you add to `readme.txt`
 3. Once approved, set the `PUBLISH_TO_WORDPRESS_ORG` variable + WP.org
    secrets so the next tag push deploys to SVN automatically.
+4. Verify on the site our service is available.
