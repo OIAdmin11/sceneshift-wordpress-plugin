@@ -100,7 +100,7 @@ final class Renderer {
 		?>
 		<div class="<?php echo esc_attr($class); ?>" data-scene-shift-phone='<?php echo esc_attr($schedule_json); ?>'>
 			<span class="scene-shift-phone__label" data-scene-shift-phone-label><?php echo esc_html($initial['label']); ?></span>
-			<a class="scene-shift-phone__number" data-scene-shift-phone-link href="<?php echo esc_attr($tel_href); ?>">
+			<a class="scene-shift-phone__number" data-scene-shift-phone-link href="<?php echo esc_url($tel_href); ?>">
 				<span data-scene-shift-phone-number><?php echo esc_html($initial['number']); ?></span>
 			</a>
 		</div>
@@ -127,35 +127,46 @@ final class Renderer {
 		$assignment_id = isset($config['assignmentId']) ? (string) $config['assignmentId'] : '';
 		$webchat_key = isset($config['publishableWebchatKey']) ? (string) $config['publishableWebchatKey'] : '';
 		if ($assignment_id === '' || $webchat_key === '') return;
+		$position = isset($chat['position']) ? (string) $chat['position'] : 'bottom-right';
+		if (!in_array($position, ['bottom-right', 'bottom-left'], true)) {
+			$position = 'bottom-right';
+		}
+		$theme = isset($chat['theme']) ? (string) $chat['theme'] : 'light';
+		if (!in_array($theme, ['light', 'dark', 'custom'], true)) {
+			$theme = 'light';
+		}
+		$radius = isset($chat['radius']) ? (string) $chat['radius'] : 'medium';
+		if (!in_array($radius, ['small', 'medium', 'large'], true)) {
+			$radius = 'medium';
+		}
 
-		$attrs = [
-			'src' => esc_url(SCENE_SHIFT_AI_ASSISTANT_API_BASE . '/embed/widget.js'),
-			'async' => 'async',
-			'type' => 'text/javascript',
-			'data-webchat-key' => $webchat_key,
-			'data-assignment-id' => $assignment_id,
-			'data-mode' => 'chat',
-			'data-position' => isset($chat['position']) ? (string) $chat['position'] : 'bottom-right',
-			'data-theme' => isset($chat['theme']) ? (string) $chat['theme'] : 'light',
-			'data-radius' => isset($chat['radius']) ? (string) $chat['radius'] : 'medium',
-			'data-main-label' => isset($chat['launcherLabel']) ? (string) $chat['launcherLabel'] : 'Chat with us',
+		$loader_url = SCENE_SHIFT_AI_ASSISTANT_API_BASE . '/embed/widget.js';
+
+		// Each value is escaped at output time with the function appropriate
+		// to its context. The URL is escaped exactly once with esc_url(), and
+		// every other value with esc_attr(). Per the WP escaping guide,
+		// double-escaping (esc_attr(esc_url(...))) is explicitly incorrect.
+		$data_attrs = [
+			'data-webchat-key'        => $webchat_key,
+			'data-assignment-id'      => $assignment_id,
+			'data-mode'               => 'chat',
+			'data-position'           => $position,
+			'data-theme'              => $theme,
+			'data-radius'             => $radius,
+			'data-main-label'         => isset($chat['launcherLabel']) ? (string) $chat['launcherLabel'] : 'Chat with us',
 			'data-empty-chat-message' => isset($chat['emptyMessage']) ? (string) $chat['emptyMessage'] : 'Ask a question to get started.',
-			'data-accent-color' => isset($chat['accentColor']) ? (string) $chat['accentColor'] : '',
-			'data-surface-color' => isset($chat['surfaceColor']) ? (string) $chat['surfaceColor'] : '',
-			'data-text-color' => isset($chat['textColor']) ? (string) $chat['textColor'] : '',
-			'data-user-bubble-color' => isset($chat['userBubbleColor']) ? (string) $chat['userBubbleColor'] : '',
-			'data-launcher-color' => isset($chat['launcherColor']) ? (string) $chat['launcherColor'] : '',
-			'data-source' => 'scene-shift-wp',
-			'data-source-version' => SCENE_SHIFT_AI_ASSISTANT_VERSION,
+			'data-accent-color'       => $this->normalize_hex_color(isset($chat['accentColor']) ? (string) $chat['accentColor'] : ''),
+			'data-surface-color'      => $this->normalize_hex_color(isset($chat['surfaceColor']) ? (string) $chat['surfaceColor'] : ''),
+			'data-text-color'         => $this->normalize_hex_color(isset($chat['textColor']) ? (string) $chat['textColor'] : ''),
+			'data-user-bubble-color'  => $this->normalize_hex_color(isset($chat['userBubbleColor']) ? (string) $chat['userBubbleColor'] : ''),
+			'data-launcher-color'     => $this->normalize_hex_color(isset($chat['launcherColor']) ? (string) $chat['launcherColor'] : ''),
+			'data-source'             => 'scene-shift-wp',
+			'data-source-version'     => SCENE_SHIFT_AI_ASSISTANT_VERSION,
 		];
 
-		echo '<script';
-		foreach ($attrs as $key => $value) {
+		echo '<script src="' . esc_url($loader_url) . '" async type="text/javascript"';
+		foreach ($data_attrs as $key => $value) {
 			if ($value === '' || $value === null) continue;
-			if ($key === 'async') {
-				echo ' async';
-				continue;
-			}
 			echo ' ' . esc_attr($key) . '="' . esc_attr((string) $value) . '"';
 		}
 		echo "></script>\n";
@@ -213,5 +224,16 @@ final class Renderer {
 		if ($start === $end) return false;
 		if ($start < $end) return $minute >= $start && $minute < $end;
 		return $minute >= $start || $minute < $end;
+	}
+
+	private function normalize_hex_color(string $value): string {
+		$normalized = strtolower(trim($value));
+		if ($normalized === '') {
+			return '';
+		}
+		if (!preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/', $normalized)) {
+			return '';
+		}
+		return $normalized;
 	}
 }

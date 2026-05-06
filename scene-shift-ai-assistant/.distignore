@@ -1,0 +1,35 @@
+# Files and folders below are excluded from the build artifact pushed to
+# WordPress.org SVN and from the GitHub release zip.
+# Format: gitignore-style globs, evaluated against paths relative to this
+# folder by 10up/action-wordpress-plugin-deploy and the local build script.
+
+# VCS metadata
+/.git
+/.gitignore
+/.gitattributes
+/.github
+
+# Editor / OS scratch
+/.idea
+/.vscode
+/.DS_Store
+*.bak
+*.swp
+*~
+Thumbs.db
+
+# Repo-level dev tooling that ships at the subrepo root, not inside the
+# plugin folder, but keep these here too in case files are mirrored.
+/phpcs.xml
+/phpcs.xml.dist
+/composer.json
+/composer.lock
+/vendor
+/node_modules
+
+# Tests + fixtures (none yet, listed proactively)
+/tests
+/.phpunit.result.cache
+
+# Distignore itself
+/.distignore

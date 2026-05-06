@@ -22,6 +22,29 @@ final class PortalClient {
 	}
 
 	/**
+	 * Build the common header set for every portal call. The portal currently
+	 * inspects the Origin header to bind requests to the connecting site URL,
+	 * so we send it explicitly even though `wp_remote_*` is server-to-server.
+	 *
+	 * @return array<string,string>
+	 */
+	private function base_headers(string $site_url, ?string $plugin_token = null): array {
+		$headers = [
+			'Accept'     => 'application/json',
+			'Origin'     => $site_url,
+			'User-Agent' => sprintf(
+				'SceneShiftAiAssistant/%s; %s',
+				SCENE_SHIFT_AI_ASSISTANT_VERSION,
+				$site_url
+			),
+		];
+		if (is_string($plugin_token) && $plugin_token !== '') {
+			$headers['Authorization'] = 'Bearer ' . $plugin_token;
+		}
+		return $headers;
+	}
+
+	/**
 	 * Exchange a one-time setup code for a long-lived plugin token.
 	 *
 	 * @return array{installId:string, pluginToken:string, tokenPrefix:string, tokenLastFour:string, config:array<string,mixed>}|\WP_Error
@@ -29,14 +52,12 @@ final class PortalClient {
 	public function exchange_setup_code(string $setup_code, string $site_url) {
 		$response = wp_remote_post($this->api_base . '/voice/wordpress-installs/exchange', [
 			'timeout' => 15,
-			'headers' => [
-				'Accept' => 'application/json',
+			'headers' => array_merge($this->base_headers($site_url), [
 				'Content-Type' => 'application/json',
-				'Origin' => $site_url,
-			],
+			]),
 			'body' => wp_json_encode([
 				'setupCode' => $setup_code,
-				'siteUrl' => $site_url,
+				'siteUrl'   => $site_url,
 			]),
 		]);
 		return $this->handle_response($response, 'exchange_setup_code');
@@ -52,11 +73,7 @@ final class PortalClient {
 			$this->api_base . '/voice/wordpress-installs/' . rawurlencode($install_id),
 			[
 				'timeout' => 15,
-				'headers' => [
-					'Accept' => 'application/json',
-					'Authorization' => 'Bearer ' . $plugin_token,
-					'Origin' => $site_url,
-				],
+				'headers' => $this->base_headers($site_url, $plugin_token),
 			],
 		);
 		return $this->handle_response($response, 'read_config');
@@ -72,15 +89,12 @@ final class PortalClient {
 		$response = wp_remote_request(
 			$this->api_base . '/voice/wordpress-installs/' . rawurlencode($install_id),
 			[
-				'method' => 'PUT',
+				'method'  => 'PUT',
 				'timeout' => 15,
-				'headers' => [
-					'Accept' => 'application/json',
+				'headers' => array_merge($this->base_headers($site_url, $plugin_token), [
 					'Content-Type' => 'application/json',
-					'Authorization' => 'Bearer ' . $plugin_token,
-					'Origin' => $site_url,
-				],
-				'body' => wp_json_encode($patch),
+				]),
+				'body'    => wp_json_encode($patch),
 			],
 		);
 		return $this->handle_response($response, 'update_config');

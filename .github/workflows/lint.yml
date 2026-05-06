@@ -1,0 +1,126 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  php-syntax:
+    name: PHP syntax (php -l) on 7.4 and 8.3
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['7.4', '8.3']
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+
+      - name: Lint every PHP file with `php -l`
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r -d '' file; do
+            if ! php -l "$file" > /dev/null; then
+              echo "::error file=$file::PHP syntax error"
+              fail=1
+            fi
+          done < <(find scene-shift-ai-assistant -type f -name '*.php' -print0)
+          exit $fail
+
+  phpcs:
+    name: WordPress Coding Standards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install Composer dev dependencies
+        run: composer install --no-progress --prefer-dist --no-interaction
+
+      - name: Run PHP_CodeSniffer
+        run: composer run lint -- --report=full
+
+  plugin-check:
+    name: WordPress.org Plugin Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # WordPress's official Plugin Check action runs the same automated
+      # checks the WordPress.org Plugin Review team uses. Categories include
+      # readme validation, plugin-repo guideline checks, security
+      # (escaping/sanitizing/nonces), late-escaping, internationalization,
+      # accessibility, and more. See:
+      # https://github.com/WordPress/plugin-check-action
+      - name: Run Plugin Check
+        uses: WordPress/plugin-check-action@v1
+        with:
+          build-dir: ./scene-shift-ai-assistant
+          # Map the action's exit code: warnings should not fail PRs but
+          # errors should. Override here if you ever want stricter gating.
+          exclude-directories: |
+            vendor
+            node_modules
+            tests
+
+  readme:
+    name: readme.txt sanity check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Verify Stable tag matches plugin Version
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin_version=$(grep -E '^\s*\*\s*Version:' scene-shift-ai-assistant/scene-shift-ai-assistant.php \
+            | head -n1 | sed -E 's/.*Version:[[:space:]]+([0-9A-Za-z.\-]+).*/\1/')
+          stable_tag=$(grep -E '^\s*Stable tag:' scene-shift-ai-assistant/readme.txt \
+            | head -n1 | sed -E 's/Stable tag:[[:space:]]+([0-9A-Za-z.\-]+).*/\1/')
+          echo "Plugin header Version: $plugin_version"
+          echo "readme.txt Stable tag: $stable_tag"
+          if [ "$plugin_version" != "$stable_tag" ]; then
+            echo "::error::Plugin header Version ($plugin_version) and readme.txt Stable tag ($stable_tag) must match."
+            exit 1
+          fi
+
+      - name: Verify required readme.txt fields
+        shell: bash
+        run: |
+          set -euo pipefail
+          for field in "Contributors" "Tags" "Requires at least" "Tested up to" "Requires PHP" "Stable tag" "License"; do
+            if ! grep -qE "^${field}:" scene-shift-ai-assistant/readme.txt; then
+              echo "::error::readme.txt is missing required field: ${field}"
+              exit 1
+            fi
+          done
+
+      - name: Verify LICENSE.txt is present
+        shell: bash
+        run: |
+          if [ ! -f scene-shift-ai-assistant/LICENSE.txt ]; then
+            echo "::error::scene-shift-ai-assistant/LICENSE.txt is missing."
+            exit 1
+          fi

@@ -1,0 +1,132 @@
+name: Publish release
+
+# Triggered when a `vX.Y.Z` tag is pushed (typically by prepare-release.yml).
+# Two independent jobs:
+#   1. github-release  — always runs. Builds the .zip and creates a GitHub
+#                        Release with that asset attached.
+#   2. wordpress-org   — only runs if WORDPRESS_ORG_USERNAME +
+#                        WORDPRESS_ORG_PASSWORD secrets are set. Deploys the
+#                        same build to the SVN trunk + tag using the
+#                        community-maintained 10up action.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  github-release:
+    name: GitHub release + zip artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Derive plugin version from tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          plugin_version=$(grep -E '^\s*\*\s*Version:' scene-shift-ai-assistant/scene-shift-ai-assistant.php \
+            | head -n1 | sed -E 's/.*Version:[[:space:]]+([0-9A-Za-z.\-]+).*/\1/')
+          stable_tag=$(grep -E '^\s*Stable tag:' scene-shift-ai-assistant/readme.txt \
+            | head -n1 | sed -E 's/Stable tag:[[:space:]]+([0-9A-Za-z.\-]+).*/\1/')
+          if [ "$version" != "$plugin_version" ] || [ "$version" != "$stable_tag" ]; then
+            echo "::error::Tag ($version), plugin Version ($plugin_version), and readme.txt Stable tag ($stable_tag) must all match."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Setup rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync zip
+
+      - name: Build clean plugin folder honoring .distignore
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.meta.outputs.version }}"
+          src="scene-shift-ai-assistant"
+          dest="build/scene-shift-ai-assistant"
+          mkdir -p build
+          # Convert .distignore to rsync --exclude-from format. .distignore
+          # uses gitignore-ish patterns; rsync --exclude-from accepts the
+          # same simple patterns once leading slashes are normalized.
+          awk '
+            /^[[:space:]]*$/ { next }
+            /^[[:space:]]*#/ { next }
+            { sub(/^\//, ""); print }
+          ' "$src/.distignore" > build/.rsync-exclude
+          echo "--- effective excludes ---"
+          cat build/.rsync-exclude
+          echo "--------------------------"
+          rsync -a --delete --exclude-from=build/.rsync-exclude "$src/" "$dest/"
+          zip_name="scene-shift-ai-assistant-${version}.zip"
+          (cd build && zip -r "../${zip_name}" scene-shift-ai-assistant)
+          echo "zip=${zip_name}" >> "$GITHUB_OUTPUT"
+          ls -la "${zip_name}"
+
+      - name: Extract changelog entry for this version
+        id: changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.meta.outputs.version }}"
+          python3 - <<EOF > release-notes.md
+import re, sys, pathlib
+text = pathlib.Path("scene-shift-ai-assistant/readme.txt").read_text(encoding="utf-8")
+match = re.search(r"^= ${version} =\n(.*?)(?=^= [0-9]|\Z)", text, re.M | re.S)
+if match:
+    sys.stdout.write(match.group(1).strip() + "\n")
+else:
+    sys.stdout.write(f"Release {version}.\n")
+EOF
+          echo "--- release notes ---"
+          cat release-notes.md
+          echo "---------------------"
+
+      - name: Create GitHub Release with zip asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          body_path: release-notes.md
+          files: ${{ steps.build.outputs.zip }}
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+
+  wordpress-org:
+    name: Deploy to WordPress.org SVN
+    runs-on: ubuntu-latest
+    needs: github-release
+    # Skip silently when the optional WP.org secrets are not configured.
+    # That keeps the workflow useful in environments (e.g. forks, staging
+    # repos) that should not push to the public directory.
+    if: ${{ vars.PUBLISH_TO_WORDPRESS_ORG == 'true' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Deploy to WordPress.org via 10up action
+        uses: 10up/action-wordpress-plugin-deploy@stable
+        env:
+          # Required secrets — set on the repository's Settings → Secrets:
+          SVN_USERNAME: ${{ secrets.WORDPRESS_ORG_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WORDPRESS_ORG_PASSWORD }}
+          # Plugin slug as registered on WordPress.org. Override here if the
+          # WP.org slug differs from the source folder name.
+          SLUG: scene-shift-ai-assistant
+          # Source files live in this subfolder of the repo. The action
+          # rsyncs from BUILD_DIR into SVN /trunk/ and tags it.
+          BUILD_DIR: ./scene-shift-ai-assistant
+          # Optional — point at a folder that contains banner-*.png,
+          # icon-*.png, screenshot-*.png that should be copied to
+          # WP.org's /assets/ instead of /trunk/. Create the folder when
+          # you have artwork to ship.
+          ASSETS_DIR: ./.wordpress-org

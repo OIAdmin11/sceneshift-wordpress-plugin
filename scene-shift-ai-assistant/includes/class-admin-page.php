@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
 
 final class AdminPage {
 	const MENU_SLUG = 'scene-shift-ai-assistant';
-	const NONCE_ACTION = 'scene_shift_admin';
+	const NOTICE_TRANSIENT_PREFIX = 'scene_shift_notice_';
 
 	/** @var SettingsStore */
 	private $settings;
@@ -34,6 +34,15 @@ final class AdminPage {
 		$this->settings = $settings;
 		$this->portal = $portal;
 		$this->renderer = $renderer;
+	}
+
+	/**
+	 * Per-form, per-action nonce action string. Using a unique action per
+	 * form prevents a nonce captured for one action (e.g. "Sync now") from
+	 * being replayed against another (e.g. "Disconnect").
+	 */
+	private static function nonce_action(string $form_action): string {
+		return 'scene_shift_' . $form_action;
 	}
 
 	public function register_menu(): void {
@@ -92,7 +101,7 @@ final class AdminPage {
 			<?php endforeach; ?>
 
 			<?php if (!$is_connected): ?>
-				<?php $this->render_connect_form($site_url); ?>
+				<?php $this->render_connect_form(); ?>
 			<?php else: ?>
 				<?php $this->render_connected_view($settings, $config, $site_url, $last_synced, $last_error); ?>
 			<?php endif; ?>
@@ -100,29 +109,45 @@ final class AdminPage {
 		<?php
 	}
 
-	private function render_connect_form(string $site_url): void {
+	private function render_connect_form(): void {
 		?>
 		<section class="scene-shift-card">
 			<h2><?php esc_html_e('Connect your Scene Shift account', 'scene-shift-ai-assistant'); ?></h2>
 			<ol class="scene-shift-steps">
 				<li><?php
-					printf(
-						/* translators: %s: portal URL */
-						esc_html__('Open the WordPress install page in the Scene Shift portal at %s.', 'scene-shift-ai-assistant'),
-						'<code>https://login.sceneshift.org/install/wordpress</code>',
+					echo wp_kses(
+						sprintf(
+							/* translators: %s: portal URL wrapped in a <code> element */
+							__('Open the WordPress install page in the Scene Shift portal at %s.', 'scene-shift-ai-assistant'),
+							'<code>https://login.sceneshift.org/install/wordpress</code>'
+						),
+						['code' => []]
 					);
 				?></li>
 				<li><?php esc_html_e('Click "Generate plugin code" to issue a one-time setup code.', 'scene-shift-ai-assistant'); ?></li>
 				<li><?php esc_html_e('Paste the code below. The code expires after 15 minutes.', 'scene-shift-ai-assistant'); ?></li>
 			</ol>
 			<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="scene-shift-form">
-				<?php wp_nonce_field(self::NONCE_ACTION); ?>
+				<?php wp_nonce_field(self::nonce_action('connect')); ?>
 				<input type="hidden" name="action" value="scene_shift_connect">
-				<input type="hidden" name="site_url" value="<?php echo esc_attr($site_url); ?>">
 				<label class="scene-shift-field">
 					<span class="scene-shift-field__label"><?php esc_html_e('Setup code', 'scene-shift-ai-assistant'); ?></span>
 					<input type="text" name="setup_code" autocomplete="off" required pattern="sswp_setup_[A-Za-z0-9_-]+">
 				</label>
+				<label class="scene-shift-field scene-shift-field--check">
+					<input type="checkbox" name="consent_remote" value="1" required>
+					<span><?php esc_html_e('I consent to this plugin connecting to Scene Shift services to exchange setup codes and sync plugin configuration.', 'scene-shift-ai-assistant'); ?></span>
+				</label>
+				<p class="scene-shift-help">
+					<?php
+					printf(
+						/* translators: 1: privacy policy URL, 2: terms URL. */
+						wp_kses_post(__('Data handling details: <a href="%1$s" target="_blank" rel="noopener noreferrer">Privacy Policy</a> and <a href="%2$s" target="_blank" rel="noopener noreferrer">Terms of Use</a>.', 'scene-shift-ai-assistant')),
+						esc_url('https://sceneshift.org/privacy'),
+						esc_url('https://sceneshift.org/terms'),
+					);
+					?>
+				</p>
 				<button type="submit" class="button button-primary"><?php esc_html_e('Connect site', 'scene-shift-ai-assistant'); ?></button>
 			</form>
 		</section>
@@ -172,12 +197,12 @@ final class AdminPage {
 			</dl>
 			<div class="scene-shift-row">
 				<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="scene-shift-inline-form">
-					<?php wp_nonce_field(self::NONCE_ACTION); ?>
+					<?php wp_nonce_field(self::nonce_action('sync')); ?>
 					<input type="hidden" name="action" value="scene_shift_sync">
 					<button type="submit" class="button"><?php esc_html_e('Sync now', 'scene-shift-ai-assistant'); ?></button>
 				</form>
 				<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="scene-shift-inline-form" onsubmit="return confirm('<?php echo esc_js(__('Disconnect this WordPress site from Scene Shift?', 'scene-shift-ai-assistant')); ?>');">
-					<?php wp_nonce_field(self::NONCE_ACTION); ?>
+					<?php wp_nonce_field(self::nonce_action('disconnect')); ?>
 					<input type="hidden" name="action" value="scene_shift_disconnect">
 					<button type="submit" class="button button-secondary"><?php esc_html_e('Disconnect', 'scene-shift-ai-assistant'); ?></button>
 				</form>
@@ -204,7 +229,7 @@ final class AdminPage {
 		?>
 
 		<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="scene-shift-form">
-			<?php wp_nonce_field(self::NONCE_ACTION); ?>
+			<?php wp_nonce_field(self::nonce_action('save_settings')); ?>
 			<input type="hidden" name="action" value="scene_shift_save_settings">
 
 			<section class="scene-shift-card">
@@ -252,10 +277,13 @@ final class AdminPage {
 				</label>
 
 				<p class="scene-shift-help"><?php
-					printf(
-						/* translators: %s: shortcode example */
-						esc_html__('Add the phone block anywhere on your site with the shortcode: %s', 'scene-shift-ai-assistant'),
-						'<code>[scene_shift_phone]</code>',
+					echo wp_kses(
+						sprintf(
+							/* translators: %s: shortcode example wrapped in a <code> element */
+							__('Add the phone block anywhere on your site with the shortcode: %s', 'scene-shift-ai-assistant'),
+							'<code>[scene_shift_phone]</code>'
+						),
+						['code' => []]
 					);
 				?></p>
 			</section>
@@ -334,11 +362,20 @@ final class AdminPage {
 	}
 
 	public function handle_connect(): void {
-		$this->verify_admin_post();
+		$this->verify_admin_post('connect');
 		$setup_code = isset($_POST['setup_code']) ? sanitize_text_field(wp_unslash($_POST['setup_code'])) : '';
-		$site_url = isset($_POST['site_url']) ? esc_url_raw(wp_unslash($_POST['site_url'])) : home_url();
+		$site_url = home_url();
 		if ($setup_code === '') {
 			$this->redirect_back('error', __('Please paste your setup code.', 'scene-shift-ai-assistant'));
+			return;
+		}
+		if (!preg_match('/^sswp_setup_[A-Za-z0-9_-]+$/', $setup_code)) {
+			$this->redirect_back('error', __('Invalid setup code format.', 'scene-shift-ai-assistant'));
+			return;
+		}
+		$consent_remote = !empty($_POST['consent_remote']);
+		if (!$consent_remote) {
+			$this->redirect_back('error', __('Please confirm data-sharing consent to connect Scene Shift services.', 'scene-shift-ai-assistant'));
 			return;
 		}
 		$result = $this->portal->exchange_setup_code($setup_code, $site_url);
@@ -359,17 +396,19 @@ final class AdminPage {
 			'last_synced_at' => current_time('mysql'),
 			'last_sync_error' => null,
 		]);
+		Plugin::schedule_sync();
 		$this->redirect_back('success', __('Connected. Configure your phone and chat below.', 'scene-shift-ai-assistant'));
 	}
 
 	public function handle_disconnect(): void {
-		$this->verify_admin_post();
+		$this->verify_admin_post('disconnect');
 		$this->settings->clear();
+		Plugin::unschedule_sync();
 		$this->redirect_back('success', __('Disconnected from Scene Shift.', 'scene-shift-ai-assistant'));
 	}
 
 	public function handle_sync(): void {
-		$this->verify_admin_post();
+		$this->verify_admin_post('sync');
 		$result = $this->sync_config_silently();
 		if (is_wp_error($result)) {
 			$this->redirect_back('error', $result->get_error_message());
@@ -379,7 +418,7 @@ final class AdminPage {
 	}
 
 	public function handle_save(): void {
-		$this->verify_admin_post();
+		$this->verify_admin_post('save_settings');
 		if (!$this->settings->is_connected()) {
 			$this->redirect_back('error', __('Connect your account first.', 'scene-shift-ai-assistant'));
 			return;
@@ -439,7 +478,13 @@ final class AdminPage {
 		$all_day = !empty($input['allDay']);
 		$start_time = isset($input['startTime']) ? (string) $input['startTime'] : '09:00';
 		$end_time = isset($input['endTime']) ? (string) $input['endTime'] : '18:00';
-		$timezone = isset($input['timezone']) ? sanitize_text_field((string) $input['timezone']) : '';
+		// Validate the timezone against PHP's known identifier list rather
+		// than just sanitizing as text. Anything unknown falls back to UTC at
+		// the bottom of this method, matching the renderer's runtime fallback.
+		$tz_input = isset($input['timezone']) ? sanitize_text_field((string) $input['timezone']) : '';
+		$timezone = ($tz_input !== '' && in_array($tz_input, timezone_identifiers_list(), true))
+			? $tz_input
+			: '';
 		$days_input = isset($input['days']) && is_array($input['days']) ? $input['days'] : [];
 		$days = array_values(array_filter(array_map(static function ($value) {
 			$num = (int) $value;
@@ -476,10 +521,15 @@ final class AdminPage {
 		$radius = isset($input['radius']) && in_array($input['radius'], ['small', 'medium', 'large'], true)
 			? $input['radius']
 			: 'medium';
+		// Use WordPress's bundled sanitize_hex_color() (loaded in admin
+		// context where this handler runs). It accepts #RGB and #RRGGBB and
+		// returns null for anything malformed — exactly the contract we want.
 		$colors = [];
 		foreach (['accentColor', 'surfaceColor', 'textColor', 'userBubbleColor', 'launcherColor'] as $field) {
-			if (isset($input[$field]) && is_string($input[$field]) && preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/i', trim($input[$field]))) {
-				$colors[$field] = strtolower(trim($input[$field]));
+			if (!isset($input[$field]) || !is_string($input[$field])) continue;
+			$value = sanitize_hex_color(trim($input[$field]));
+			if (is_string($value) && $value !== '') {
+				$colors[$field] = strtolower($value);
 			}
 		}
 		return array_merge([
@@ -492,22 +542,32 @@ final class AdminPage {
 		], $colors);
 	}
 
-	private function verify_admin_post(): void {
+	private function verify_admin_post(string $form_action): void {
 		if (!current_user_can('manage_options')) {
 			wp_die(esc_html__('You do not have permission to do that.', 'scene-shift-ai-assistant'), 403);
 		}
-		check_admin_referer(self::NONCE_ACTION);
+		check_admin_referer(self::nonce_action($form_action));
 	}
 
+	/**
+	 * Stash a notice in a short-lived, user-scoped transient and redirect back
+	 * to the settings page. Using a transient (instead of a query-string
+	 * payload) prevents anyone from crafting a URL that displays a fake
+	 * success/error message in the admin.
+	 */
 	private function redirect_back(string $kind, string $message): void {
-		$url = add_query_arg(
-			[
-				'page' => self::MENU_SLUG,
-				'scene_shift_status' => $kind,
-				'scene_shift_message' => rawurlencode($message),
-			],
-			admin_url('options-general.php'),
-		);
+		$user_id = get_current_user_id();
+		if ($user_id > 0) {
+			set_transient(
+				self::NOTICE_TRANSIENT_PREFIX . (int) $user_id,
+				[
+					'kind'    => $kind === 'success' ? 'success' : 'error',
+					'message' => $message,
+				],
+				MINUTE_IN_SECONDS
+			);
+		}
+		$url = add_query_arg(['page' => self::MENU_SLUG], admin_url('options-general.php'));
 		wp_safe_redirect($url);
 		exit;
 	}
@@ -516,11 +576,17 @@ final class AdminPage {
 	 * @return array<int, array{kind:string,message:string}>
 	 */
 	private function collect_admin_notices(): array {
-		$kind = isset($_GET['scene_shift_status']) ? sanitize_text_field(wp_unslash($_GET['scene_shift_status'])) : '';
-		$message = isset($_GET['scene_shift_message']) ? rawurldecode(sanitize_text_field(wp_unslash($_GET['scene_shift_message']))) : '';
-		if ($kind === '' || $message === '') return [];
+		$user_id = get_current_user_id();
+		if ($user_id <= 0) return [];
+		$key = self::NOTICE_TRANSIENT_PREFIX . (int) $user_id;
+		$notice = get_transient($key);
+		if (!is_array($notice)) return [];
+		delete_transient($key);
+		$kind = isset($notice['kind']) && $notice['kind'] === 'success' ? 'success' : 'error';
+		$message = isset($notice['message']) ? (string) $notice['message'] : '';
+		if ($message === '') return [];
 		return [[
-			'kind' => $kind === 'success' ? 'success' : 'error',
+			'kind'    => $kind,
 			'message' => $message,
 		]];
 	}

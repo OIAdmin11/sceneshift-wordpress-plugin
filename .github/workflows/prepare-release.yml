@@ -1,0 +1,175 @@
+name: Prepare release
+
+# Manually triggered. Bumps the plugin Version + Stable tag in lock-step,
+# adds a Changelog stub, commits to main, and pushes a `vX.Y.Z` tag that
+# kicks off the publish workflow.
+#
+# Inputs:
+#   version  — required. Strict semver (X.Y.Z), e.g. 0.2.0 or 1.0.1.
+#   draft    — optional. If true, creates a PR instead of committing to main.
+#
+# Required permissions / secrets:
+#   - GITHUB_TOKEN (built-in) is used to push the version commit and tag.
+#     The default token has `contents: write` on this repo so no extra
+#     PAT is needed unless branch-protection rules require it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New plugin version (semver, e.g. 0.2.0)'
+        required: true
+        type: string
+      draft:
+        description: 'Open a PR instead of committing to main'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    name: Bump version and tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Validate semver input
+        id: semver
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must be strict semver X.Y.Z (got '$version')."
+            exit 1
+          fi
+          current=$(grep -E '^\s*\*\s*Version:' scene-shift-ai-assistant/scene-shift-ai-assistant.php \
+            | head -n1 | sed -E 's/.*Version:[[:space:]]+([0-9A-Za-z.\-]+).*/\1/')
+          echo "Current version: $current"
+          echo "Requested version: $version"
+          if [ "$current" = "$version" ]; then
+            echo "::error::Requested version ($version) is the same as the current version. Pick a higher version per WordPress guideline 15."
+            exit 1
+          fi
+          # Sort -V with the two values and verify the new one is greater.
+          higher=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n1)
+          if [ "$higher" != "$version" ]; then
+            echo "::error::Requested version ($version) is not greater than current ($current)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Update plugin header Version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.semver.outputs.version }}"
+          sed -i -E "s/^([[:space:]]*\*[[:space:]]*Version:[[:space:]]+).+/\1${version}/" \
+            scene-shift-ai-assistant/scene-shift-ai-assistant.php
+
+      - name: Update SCENE_SHIFT_AI_ASSISTANT_VERSION constant
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.semver.outputs.version }}"
+          sed -i -E "s/(define\\('SCENE_SHIFT_AI_ASSISTANT_VERSION',[[:space:]]*')[^']+(')/\\1${version}\\2/" \
+            scene-shift-ai-assistant/scene-shift-ai-assistant.php
+
+      - name: Update readme.txt Stable tag + add changelog stub
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.semver.outputs.version }}"
+          sed -i -E "s/^(Stable tag:[[:space:]]+).+/\\1${version}/" scene-shift-ai-assistant/readme.txt
+          if ! grep -qE "^= ${version} =\$" scene-shift-ai-assistant/readme.txt; then
+            python3 - <<EOF
+import io, re, sys
+path = "scene-shift-ai-assistant/readme.txt"
+with open(path, encoding="utf-8") as fh:
+    content = fh.read()
+stub = f"\n= ${version} =\n* TODO: describe what changed in this release.\n"
+new = re.sub(r"(== Changelog ==\n)", r"\1" + stub, content, count=1)
+if new == content:
+    sys.stderr.write("Could not find '== Changelog ==' section in readme.txt\n")
+    sys.exit(1)
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(new)
+EOF
+          fi
+
+      - name: Setup PHP + WP-CLI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+          tools: wp-cli
+
+      - name: Regenerate translation template (.pot)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p scene-shift-ai-assistant/languages
+          wp i18n make-pot scene-shift-ai-assistant \
+            scene-shift-ai-assistant/languages/scene-shift-ai-assistant.pot \
+            --domain=scene-shift-ai-assistant \
+            --slug=scene-shift-ai-assistant \
+            --headers='{"Report-Msgid-Bugs-To":"https://github.com/OIAdmin11/sceneshift-wordpress-plugin/issues","Last-Translator":"Scene Shift <support@sceneshift.org>","Language-Team":"Scene Shift <support@sceneshift.org>"}' \
+            --skip-audit
+
+      - name: Show diff
+        run: git --no-pager diff
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit + tag (direct to main)
+        if: ${{ inputs.draft == false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.semver.outputs.version }}"
+          git add \
+            scene-shift-ai-assistant/scene-shift-ai-assistant.php \
+            scene-shift-ai-assistant/readme.txt \
+            scene-shift-ai-assistant/languages/scene-shift-ai-assistant.pot
+          git commit -m "Release v${version}"
+          git tag -a "v${version}" -m "Release v${version}"
+          git push origin main
+          git push origin "v${version}"
+
+      - name: Open draft PR (if draft=true)
+        if: ${{ inputs.draft == true }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: release/v${{ steps.semver.outputs.version }}
+          title: 'Release v${{ steps.semver.outputs.version }}'
+          commit-message: 'Release v${{ steps.semver.outputs.version }}'
+          body: |
+            Automated release prep created by `prepare-release.yml`.
+
+            * Bumps plugin header Version + `SCENE_SHIFT_AI_ASSISTANT_VERSION` constant
+            * Bumps `Stable tag` in `readme.txt`
+            * Regenerates `languages/scene-shift-ai-assistant.pot` from current strings
+            * Adds a Changelog stub for `${{ steps.semver.outputs.version }}` — please replace the TODO line with the real changelog before merging
+
+            Merging this PR does **not** trigger publication. After merge, push the tag manually:
+
+            ```sh
+            git fetch origin main
+            git checkout main && git pull
+            git tag -a v${{ steps.semver.outputs.version }} -m "Release v${{ steps.semver.outputs.version }}"
+            git push origin v${{ steps.semver.outputs.version }}
+            ```
+
+            That tag push triggers `publish-release.yml`.
