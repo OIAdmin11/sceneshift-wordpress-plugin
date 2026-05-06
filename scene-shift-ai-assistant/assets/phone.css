@@ -1,0 +1,33 @@
+/*
+ * Scene Shift phone block — minimal, premium, neutral surfaces.
+ * Inherits parent typography; uses the indigo accent only for the link state.
+ */
+.scene-shift-phone {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 8px;
+	font: inherit;
+	color: inherit;
+}
+
+.scene-shift-phone__label {
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: #6b7280;
+}
+
+.scene-shift-phone__number {
+	font-size: 1.05em;
+	font-weight: 600;
+	color: inherit;
+	text-decoration: none;
+	letter-spacing: -0.01em;
+}
+
+.scene-shift-phone__number:hover,
+.scene-shift-phone__number:focus {
+	color: #4f46e5;
+	text-decoration: underline;
+}
