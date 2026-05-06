@@ -2,7 +2,7 @@
 Contributors: sceneshift
 Tags: ai, voice, chat, phone, customer support
 Requires at least: 6.2
-Tested up to: 6.7
+Tested up to: 6.9
 Requires PHP: 7.4
 Stable tag: 0.1.0
 License: GPLv2 or later

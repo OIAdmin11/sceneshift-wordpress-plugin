@@ -18,21 +18,37 @@
 	<config name="testVersion" value="7.4-"/>
 	<config name="minimum_supported_wp_version" value="6.2"/>
 
-	<!-- Core WordPress ruleset bundled by squizlabs/php_codesniffer + wp-coding-standards/wpcs -->
-	<rule ref="WordPress">
-		<!-- These two are noisy and not safety-critical for our codebase. -->
+	<!--
+		WordPress-Extra implies WordPress-Core. We deliberately drop
+		WordPress-Docs (overly strict for plugin code) and a handful of
+		opinion-based stylistic sniffs. Security, escaping, sanitization,
+		i18n, and naming conventions are all kept.
+	-->
+	<rule ref="WordPress-Extra">
 		<exclude name="WordPress.Files.FileName"/>
 		<exclude name="Generic.Arrays.DisallowShortArraySyntax"/>
 		<exclude name="Universal.Arrays.DisallowShortArraySyntax"/>
+
+		<!-- Stylistic / opinion-based: Yoda conditions, alignment, short ternaries, inline ifs. -->
+		<exclude name="WordPress.PHP.YodaConditions"/>
+		<exclude name="Generic.Formatting.MultipleStatementAlignment"/>
+		<exclude name="WordPress.Arrays.MultipleStatementAlignment"/>
+		<exclude name="Universal.Operators.DisallowShortTernary"/>
+		<exclude name="Generic.ControlStructures.InlineControlStructure"/>
+
+		<!--
+			Doc comment requirements are noisy for app-side plugin code. We keep
+			our existing top-of-file headers and inline comments, but don't
+			require docblocks on every class/function/property.
+		-->
+		<exclude name="Squiz.Commenting"/>
+		<exclude name="Generic.Commenting.DocComment"/>
 	</rule>
 
-	<rule ref="WordPress-Extra"/>
-	<rule ref="WordPress-Docs"/>
-
-	<!-- PHP-cross-version compatibility checks. -->
+	<!-- PHP cross-version compatibility. -->
 	<rule ref="PHPCompatibilityWP"/>
 
-	<!-- Project text-domain enforcement. -->
+	<!-- Plugin text-domain enforcement. -->
 	<rule ref="WordPress.WP.I18n">
 		<properties>
 			<property name="text_domain" type="array">

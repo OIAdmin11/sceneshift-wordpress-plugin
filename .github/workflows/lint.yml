@@ -77,8 +77,14 @@ jobs:
         uses: WordPress/plugin-check-action@v1
         with:
           build-dir: ./scene-shift-ai-assistant
-          # Map the action's exit code: warnings should not fail PRs but
-          # errors should. Override here if you ever want stricter gating.
+          # Hidden files (.distignore, .gitkeep) are required in the source
+          # tree but must not appear in the WordPress.org build artifact.
+          # 10up's deploy action already strips them via .distignore; we tell
+          # Plugin Check to ignore them too so the lint matches the published
+          # zip rather than the source tree.
+          exclude-files: |
+            .distignore
+            languages/.gitkeep
           exclude-directories: |
             vendor
             node_modules

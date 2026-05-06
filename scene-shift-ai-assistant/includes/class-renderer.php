@@ -10,29 +10,33 @@
 
 namespace SceneShift\AiAssistant;
 
-if (!defined('ABSPATH')) {
+if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 final class Renderer {
 	const PHONE_SHORTCODE = 'scene_shift_phone';
 	const CHAT_SHORTCODE = 'scene_shift_chat';
+	const CHAT_SCRIPT_HANDLE = 'scene-shift-chat-widget';
 
 	/** @var SettingsStore */
 	private $settings;
 
-	public function __construct(SettingsStore $settings) {
+	/** @var array<string,string> */
+	private $chat_data_attrs = [];
+
+	public function __construct( SettingsStore $settings ) {
 		$this->settings = $settings;
 	}
 
 	public function register_shortcodes(): void {
-		add_shortcode(self::PHONE_SHORTCODE, [$this, 'render_phone_shortcode']);
-		add_shortcode(self::CHAT_SHORTCODE, [$this, 'render_chat_shortcode']);
+		add_shortcode( self::PHONE_SHORTCODE, [ $this, 'render_phone_shortcode' ] );
+		add_shortcode( self::CHAT_SHORTCODE, [ $this, 'render_chat_shortcode' ] );
 	}
 
 	public function enqueue_assets(): void {
 		$config = $this->settings->config();
-		if (!is_array($config)) return;
+		if ( ! is_array( $config )) return;
 
 		wp_register_script(
 			'scene-shift-phone-switcher',
@@ -53,55 +57,55 @@ final class Renderer {
 	/**
 	 * @param array<string,mixed> $atts
 	 */
-	public function render_phone_shortcode($atts): string {
+	public function render_phone_shortcode( $atts ): string {
 		$config = $this->settings->config();
-		if (!is_array($config)) {
+		if ( ! is_array( $config ) ) {
 			return '';
 		}
 
-		$phone = isset($config['phone']) && is_array($config['phone']) ? $config['phone'] : [];
-		$enabled = isset($phone['enabled']) ? (bool) $phone['enabled'] : true;
-		if (!$enabled) return '';
+		$phone = isset( $config['phone'] ) && is_array( $config['phone'] ) ? $config['phone'] : [];
+		$enabled = isset( $phone['enabled'] ) ? (bool) $phone['enabled'] : true;
+		if ( ! $enabled) return '';
 
-		$ai_number = isset($config['assistantPhoneNumber']) ? (string) $config['assistantPhoneNumber'] : '';
-		$alt_number = isset($phone['alternativeNumber']) ? (string) $phone['alternativeNumber'] : '';
-		if ($ai_number === '' && $alt_number === '') {
+		$ai_number = isset( $config['assistantPhoneNumber'] ) ? (string) $config['assistantPhoneNumber'] : '';
+		$alt_number = isset( $phone['alternativeNumber'] ) ? (string) $phone['alternativeNumber'] : '';
+		if ( $ai_number === '' && $alt_number === '' ) {
 			return '';
 		}
 
-		$ai_label = isset($phone['aiLabel']) ? (string) $phone['aiLabel'] : 'AI assistant';
-		$alt_label = isset($phone['alternativeLabel']) ? (string) $phone['alternativeLabel'] : 'Live agent';
+		$ai_label = isset( $phone['aiLabel'] ) ? (string) $phone['aiLabel'] : 'AI assistant';
+		$alt_label = isset( $phone['alternativeLabel'] ) ? (string) $phone['alternativeLabel'] : 'Live agent';
 
 		$schedule = [
-			'allDay' => isset($phone['allDay']) ? (bool) $phone['allDay'] : true,
-			'startMinute' => isset($phone['startMinute']) ? (int) $phone['startMinute'] : 540,
-			'endMinute' => isset($phone['endMinute']) ? (int) $phone['endMinute'] : 1080,
-			'timezone' => isset($phone['timezone']) ? (string) $phone['timezone'] : 'UTC',
-			'days' => isset($phone['days']) && is_array($phone['days']) ? array_map('intval', $phone['days']) : [],
+			'allDay' => isset( $phone['allDay'] ) ? (bool) $phone['allDay'] : true,
+			'startMinute' => isset( $phone['startMinute'] ) ? (int) $phone['startMinute'] : 540,
+			'endMinute' => isset( $phone['endMinute'] ) ? (int) $phone['endMinute'] : 1080,
+			'timezone' => isset( $phone['timezone'] ) ? (string) $phone['timezone'] : 'UTC',
+			'days' => isset( $phone['days'] ) && is_array( $phone['days'] ) ? array_map( 'intval', $phone['days'] ) : [],
 			'aiNumber' => $ai_number,
 			'alternativeNumber' => $alt_number,
 			'aiLabel' => $ai_label,
 			'alternativeLabel' => $alt_label,
 		];
 
-		$initial = $this->pick_initial_phone($schedule);
-		if ($initial === null) {
+		$initial = $this->pick_initial_phone( $schedule );
+		if ( $initial === null ) {
 			return '';
 		}
 
-		wp_enqueue_script('scene-shift-phone-switcher');
-		wp_enqueue_style('scene-shift-phone');
+		wp_enqueue_script( 'scene-shift-phone-switcher' );
+		wp_enqueue_style( 'scene-shift-phone' );
 
-		$class = isset($atts['class']) ? sanitize_html_class($atts['class']) : 'scene-shift-phone';
-		$tel_href = 'tel:' . preg_replace('/[^0-9+]/', '', $initial['number']);
-		$schedule_json = wp_json_encode($schedule);
+		$class = isset( $atts['class'] ) ? sanitize_html_class( $atts['class'] ) : 'scene-shift-phone';
+		$tel_href = 'tel:' . preg_replace( '/[^0-9+]/', '', $initial['number'] );
+		$schedule_json = wp_json_encode( $schedule );
 
 		ob_start();
 		?>
-		<div class="<?php echo esc_attr($class); ?>" data-scene-shift-phone='<?php echo esc_attr($schedule_json); ?>'>
-			<span class="scene-shift-phone__label" data-scene-shift-phone-label><?php echo esc_html($initial['label']); ?></span>
-			<a class="scene-shift-phone__number" data-scene-shift-phone-link href="<?php echo esc_url($tel_href); ?>">
-				<span data-scene-shift-phone-number><?php echo esc_html($initial['number']); ?></span>
+		<div class="<?php echo esc_attr( $class ); ?>" data-scene-shift-phone='<?php echo esc_attr( $schedule_json ); ?>'>
+			<span class="scene-shift-phone__label" data-scene-shift-phone-label><?php echo esc_html( $initial['label'] ); ?></span>
+			<a class="scene-shift-phone__number" data-scene-shift-phone-link href="<?php echo esc_url( $tel_href ); ?>">
+				<span data-scene-shift-phone-number><?php echo esc_html( $initial['number'] ); ?></span>
 			</a>
 		</div>
 		<?php
@@ -111,65 +115,104 @@ final class Renderer {
 	/**
 	 * @param array<string,mixed> $atts
 	 */
-	public function render_chat_shortcode($atts): string {
+	public function render_chat_shortcode( $atts ): string { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- $atts is required by the add_shortcode() callback contract.
 		// The chat widget mounts itself globally via wp_footer; this shortcode
 		// is just a placeholder anchor for documentation/marketing pages.
+		unset( $atts );
 		return '<div class="scene-shift-chat-anchor" aria-hidden="true"></div>';
 	}
 
-	public function render_footer_chat(): void {
+	/**
+	 * Enqueues the Scene Shift webchat loader script in the page footer when
+	 * chat is enabled. The runtime is configured via `data-*` attributes
+	 * which are injected onto the generated <script> tag using the
+	 * `script_loader_tag` filter so that WordPress (not us) owns the
+	 * `<script src=...>` markup itself.
+	 */
+	public function enqueue_chat_widget(): void {
 		$config = $this->settings->config();
-		if (!is_array($config)) return;
+		if ( ! is_array( $config ) ) {
+			return;
+		}
 
-		$chat = isset($config['chat']) && is_array($config['chat']) ? $config['chat'] : [];
-		if (isset($chat['enabled']) && $chat['enabled'] === false) return;
+		$chat = isset( $config['chat'] ) && is_array( $config['chat'] ) ? $config['chat'] : [];
+		if ( isset( $chat['enabled'] ) && $chat['enabled'] === false ) {
+			return;
+		}
 
-		$assignment_id = isset($config['assignmentId']) ? (string) $config['assignmentId'] : '';
-		$webchat_key = isset($config['publishableWebchatKey']) ? (string) $config['publishableWebchatKey'] : '';
-		if ($assignment_id === '' || $webchat_key === '') return;
-		$position = isset($chat['position']) ? (string) $chat['position'] : 'bottom-right';
-		if (!in_array($position, ['bottom-right', 'bottom-left'], true)) {
+		$assignment_id = isset( $config['assignmentId'] ) ? (string) $config['assignmentId'] : '';
+		$webchat_key = isset( $config['publishableWebchatKey'] ) ? (string) $config['publishableWebchatKey'] : '';
+		if ( $assignment_id === '' || $webchat_key === '' ) {
+			return;
+		}
+
+		$position = isset( $chat['position'] ) ? (string) $chat['position'] : 'bottom-right';
+		if ( ! in_array( $position, [ 'bottom-right', 'bottom-left' ], true ) ) {
 			$position = 'bottom-right';
 		}
-		$theme = isset($chat['theme']) ? (string) $chat['theme'] : 'light';
-		if (!in_array($theme, ['light', 'dark', 'custom'], true)) {
+		$theme = isset( $chat['theme'] ) ? (string) $chat['theme'] : 'light';
+		if ( ! in_array( $theme, [ 'light', 'dark', 'custom' ], true ) ) {
 			$theme = 'light';
 		}
-		$radius = isset($chat['radius']) ? (string) $chat['radius'] : 'medium';
-		if (!in_array($radius, ['small', 'medium', 'large'], true)) {
+		$radius = isset( $chat['radius'] ) ? (string) $chat['radius'] : 'medium';
+		if ( ! in_array( $radius, [ 'small', 'medium', 'large' ], true ) ) {
 			$radius = 'medium';
 		}
 
-		$loader_url = SCENE_SHIFT_AI_ASSISTANT_API_BASE . '/embed/widget.js';
-
-		// Each value is escaped at output time with the function appropriate
-		// to its context. The URL is escaped exactly once with esc_url(), and
-		// every other value with esc_attr(). Per the WP escaping guide,
-		// double-escaping (esc_attr(esc_url(...))) is explicitly incorrect.
-		$data_attrs = [
+		$this->chat_data_attrs = [
 			'data-webchat-key'        => $webchat_key,
 			'data-assignment-id'      => $assignment_id,
 			'data-mode'               => 'chat',
 			'data-position'           => $position,
 			'data-theme'              => $theme,
 			'data-radius'             => $radius,
-			'data-main-label'         => isset($chat['launcherLabel']) ? (string) $chat['launcherLabel'] : 'Chat with us',
-			'data-empty-chat-message' => isset($chat['emptyMessage']) ? (string) $chat['emptyMessage'] : 'Ask a question to get started.',
-			'data-accent-color'       => $this->normalize_hex_color(isset($chat['accentColor']) ? (string) $chat['accentColor'] : ''),
-			'data-surface-color'      => $this->normalize_hex_color(isset($chat['surfaceColor']) ? (string) $chat['surfaceColor'] : ''),
-			'data-text-color'         => $this->normalize_hex_color(isset($chat['textColor']) ? (string) $chat['textColor'] : ''),
-			'data-user-bubble-color'  => $this->normalize_hex_color(isset($chat['userBubbleColor']) ? (string) $chat['userBubbleColor'] : ''),
-			'data-launcher-color'     => $this->normalize_hex_color(isset($chat['launcherColor']) ? (string) $chat['launcherColor'] : ''),
+			'data-main-label'         => isset( $chat['launcherLabel'] ) ? (string) $chat['launcherLabel'] : 'Chat with us',
+			'data-empty-chat-message' => isset( $chat['emptyMessage'] ) ? (string) $chat['emptyMessage'] : 'Ask a question to get started.',
+			'data-accent-color'       => $this->normalize_hex_color( isset( $chat['accentColor'] ) ? (string) $chat['accentColor'] : '' ),
+			'data-surface-color'      => $this->normalize_hex_color( isset( $chat['surfaceColor'] ) ? (string) $chat['surfaceColor'] : '' ),
+			'data-text-color'         => $this->normalize_hex_color( isset( $chat['textColor'] ) ? (string) $chat['textColor'] : '' ),
+			'data-user-bubble-color'  => $this->normalize_hex_color( isset( $chat['userBubbleColor'] ) ? (string) $chat['userBubbleColor'] : '' ),
+			'data-launcher-color'     => $this->normalize_hex_color( isset( $chat['launcherColor'] ) ? (string) $chat['launcherColor'] : '' ),
 			'data-source'             => 'scene-shift-wp',
 			'data-source-version'     => SCENE_SHIFT_AI_ASSISTANT_VERSION,
 		];
 
-		echo '<script src="' . esc_url($loader_url) . '" async type="text/javascript"';
-		foreach ($data_attrs as $key => $value) {
-			if ($value === '' || $value === null) continue;
-			echo ' ' . esc_attr($key) . '="' . esc_attr((string) $value) . '"';
+		$loader_url = SCENE_SHIFT_AI_ASSISTANT_API_BASE . '/embed/widget.js';
+
+		wp_register_script(
+			self::CHAT_SCRIPT_HANDLE,
+			$loader_url,
+			[],
+			SCENE_SHIFT_AI_ASSISTANT_VERSION,
+			true
+		);
+		add_filter( 'script_loader_tag', [ $this, 'inject_chat_data_attrs' ], 10, 2 );
+		wp_enqueue_script( self::CHAT_SCRIPT_HANDLE );
+	}
+
+	/**
+	 * Injects `async` and the configured `data-*` attributes onto the
+	 * Scene Shift chat widget <script> tag. WordPress generates the tag with
+	 * the standard `<script src="..." id="..."></script>` shape; we splice
+	 * our attributes in just after the opening `<script` token.
+	 *
+	 * @param string $tag    The <script> tag for the enqueued script.
+	 * @param string $handle The script's registered handle.
+	 */
+	public function inject_chat_data_attrs( string $tag, string $handle ): string {
+		if ( $handle !== self::CHAT_SCRIPT_HANDLE ) {
+			return $tag;
 		}
-		echo "></script>\n";
+
+		$attrs = ' async';
+		foreach ( $this->chat_data_attrs as $key => $value ) {
+			if ( $value === '' || $value === null ) {
+				continue;
+			}
+			$attrs .= ' ' . esc_attr( $key ) . '="' . esc_attr( (string) $value ) . '"';
+		}
+
+		return (string) preg_replace( '/<script(\s|>)/', '<script' . $attrs . '$1', $tag, 1 );
 	}
 
 	/**
@@ -190,16 +233,22 @@ final class Renderer {
 	 * } $schedule
 	 * @return array{number:string,label:string}|null
 	 */
-	private function pick_initial_phone(array $schedule): ?array {
-		$ai = trim($schedule['aiNumber']);
-		$alt = trim($schedule['alternativeNumber']);
+	private function pick_initial_phone( array $schedule ): ?array {
+		$ai = trim( $schedule['aiNumber'] );
+		$alt = trim( $schedule['alternativeNumber'] );
 
-		$show_ai = ($schedule['allDay'] && $ai !== '') || ($ai !== '' && $this->is_in_window($schedule));
-		if ($show_ai) {
-			return ['number' => $ai, 'label' => $schedule['aiLabel']];
+		$show_ai = ( $schedule['allDay'] && $ai !== '' ) || ( $ai !== '' && $this->is_in_window( $schedule ) );
+		if ( $show_ai ) {
+			return [
+				'number' => $ai,
+				'label' => $schedule['aiLabel'],
+			];
 		}
-		if ($alt !== '') {
-			return ['number' => $alt, 'label' => $schedule['alternativeLabel']];
+		if ( $alt !== '' ) {
+			return [
+				'number' => $alt,
+				'label' => $schedule['alternativeLabel'],
+			];
 		}
 		return null;
 	}
@@ -207,18 +256,18 @@ final class Renderer {
 	/**
 	 * @param array{startMinute:int,endMinute:int,timezone:string,days:int[]} $schedule
 	 */
-	private function is_in_window(array $schedule): bool {
+	private function is_in_window( array $schedule ): bool {
 		$timezone = $schedule['timezone'] !== '' ? $schedule['timezone'] : 'UTC';
 		try {
-			$now = new \DateTime('now', new \DateTimeZone($timezone));
-		} catch (\Throwable $e) {
-			$now = new \DateTime('now', new \DateTimeZone('UTC'));
+			$now = new \DateTime( 'now', new \DateTimeZone( $timezone ) );
+		} catch ( \Throwable $e ) {
+			$now = new \DateTime( 'now', new \DateTimeZone( 'UTC' ) );
 		}
-		$weekday = (int) $now->format('w');
-		if (!empty($schedule['days']) && !in_array($weekday, $schedule['days'], true)) {
+		$weekday = (int) $now->format( 'w' );
+		if ( ! empty( $schedule['days'] ) && ! in_array( $weekday, $schedule['days'], true ) ) {
 			return false;
 		}
-		$minute = ((int) $now->format('G') * 60) + (int) $now->format('i');
+		$minute = ( (int) $now->format( 'G' ) * 60 ) + (int) $now->format( 'i' );
 		$start = (int) $schedule['startMinute'];
 		$end = (int) $schedule['endMinute'];
 		if ($start === $end) return false;
@@ -226,12 +275,12 @@ final class Renderer {
 		return $minute >= $start || $minute < $end;
 	}
 
-	private function normalize_hex_color(string $value): string {
-		$normalized = strtolower(trim($value));
-		if ($normalized === '') {
+	private function normalize_hex_color( string $value ): string {
+		$normalized = strtolower( trim( $value ) );
+		if ( $normalized === '' ) {
 			return '';
 		}
-		if (!preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/', $normalized)) {
+		if ( ! preg_match( '/^#([0-9a-f]{3}|[0-9a-f]{6})$/', $normalized ) ) {
 			return '';
 		}
 		return $normalized;
