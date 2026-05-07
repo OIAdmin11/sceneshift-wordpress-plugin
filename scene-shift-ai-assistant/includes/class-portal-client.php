@@ -9,7 +9,7 @@
 
 namespace SceneShift\AiAssistant;
 
-if (!defined('ABSPATH')) {
+if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
@@ -17,8 +17,8 @@ final class PortalClient {
 	/** @var string */
 	private $api_base;
 
-	public function __construct(string $api_base) {
-		$this->api_base = rtrim($api_base, '/');
+	public function __construct( string $api_base ) {
+		$this->api_base = rtrim( $api_base, '/' );
 	}
 
 	/**
@@ -28,7 +28,7 @@ final class PortalClient {
 	 *
 	 * @return array<string,string>
 	 */
-	private function base_headers(string $site_url, ?string $plugin_token = null): array {
+	private function base_headers( string $site_url, ?string $plugin_token = null ): array {
 		$headers = [
 			'Accept'     => 'application/json',
 			'Origin'     => $site_url,
@@ -38,7 +38,7 @@ final class PortalClient {
 				$site_url
 			),
 		];
-		if (is_string($plugin_token) && $plugin_token !== '') {
+		if ( is_string( $plugin_token ) && $plugin_token !== '' ) {
 			$headers['Authorization'] = 'Bearer ' . $plugin_token;
 		}
 		return $headers;
@@ -49,18 +49,26 @@ final class PortalClient {
 	 *
 	 * @return array{installId:string, pluginToken:string, tokenPrefix:string, tokenLastFour:string, config:array<string,mixed>}|\WP_Error
 	 */
-	public function exchange_setup_code(string $setup_code, string $site_url) {
-		$response = wp_remote_post($this->api_base . '/voice/wordpress-installs/exchange', [
-			'timeout' => 15,
-			'headers' => array_merge($this->base_headers($site_url), [
-				'Content-Type' => 'application/json',
-			]),
-			'body' => wp_json_encode([
-				'setupCode' => $setup_code,
-				'siteUrl'   => $site_url,
-			]),
-		]);
-		return $this->handle_response($response, 'exchange_setup_code');
+	public function exchange_setup_code( string $setup_code, string $site_url ) {
+		$response = wp_remote_post(
+			$this->api_base . '/voice/wordpress-installs/exchange',
+			[
+				'timeout' => 15,
+				'headers' => array_merge(
+					$this->base_headers( $site_url ),
+					[
+						'Content-Type' => 'application/json',
+					]
+				),
+				'body' => wp_json_encode(
+					[
+						'setupCode' => $setup_code,
+						'siteUrl'   => $site_url,
+					]
+				),
+			]
+		);
+		return $this->handle_response( $response, 'exchange_setup_code' );
 	}
 
 	/**
@@ -68,15 +76,15 @@ final class PortalClient {
 	 *
 	 * @return array{config:array<string,mixed>}|\WP_Error
 	 */
-	public function read_config(string $install_id, string $plugin_token, string $site_url) {
+	public function read_config( string $install_id, string $plugin_token, string $site_url ) {
 		$response = wp_remote_get(
-			$this->api_base . '/voice/wordpress-installs/' . rawurlencode($install_id),
+			$this->api_base . '/voice/wordpress-installs/' . rawurlencode( $install_id ),
 			[
 				'timeout' => 15,
-				'headers' => $this->base_headers($site_url, $plugin_token),
+				'headers' => $this->base_headers( $site_url, $plugin_token ),
 			],
 		);
-		return $this->handle_response($response, 'read_config');
+		return $this->handle_response( $response, 'read_config' );
 	}
 
 	/**
@@ -85,50 +93,57 @@ final class PortalClient {
 	 * @param array<string,mixed> $patch
 	 * @return array{config:array<string,mixed>}|\WP_Error
 	 */
-	public function update_config(string $install_id, string $plugin_token, string $site_url, array $patch) {
+	public function update_config( string $install_id, string $plugin_token, string $site_url, array $patch ) {
 		$response = wp_remote_request(
-			$this->api_base . '/voice/wordpress-installs/' . rawurlencode($install_id),
+			$this->api_base . '/voice/wordpress-installs/' . rawurlencode( $install_id ),
 			[
 				'method'  => 'PUT',
 				'timeout' => 15,
-				'headers' => array_merge($this->base_headers($site_url, $plugin_token), [
-					'Content-Type' => 'application/json',
-				]),
-				'body'    => wp_json_encode($patch),
+				'headers' => array_merge(
+					$this->base_headers( $site_url, $plugin_token ),
+					[
+						'Content-Type' => 'application/json',
+					]
+				),
+				'body'    => wp_json_encode( $patch ),
 			],
 		);
-		return $this->handle_response($response, 'update_config');
+		return $this->handle_response( $response, 'update_config' );
 	}
 
 	public function api_base(): string {
 		return $this->api_base;
 	}
 
-	private function handle_response($response, string $operation) {
-		if (is_wp_error($response)) {
+	private function handle_response( $response, string $operation ) {
+		if ( is_wp_error( $response ) ) {
 			return $response;
 		}
-		$status = (int) wp_remote_retrieve_response_code($response);
-		$body = wp_remote_retrieve_body($response);
-		$data = $body !== '' ? json_decode($body, true) : null;
-		if ($status >= 200 && $status < 300) {
-			return is_array($data) ? $data : [];
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		$body = wp_remote_retrieve_body( $response );
+		$data = $body !== '' ? json_decode( $body, true ) : null;
+		if ( $status >= 200 && $status < 300 ) {
+			return is_array( $data ) ? $data : [];
 		}
 		$message = '';
-		if (is_array($data) && isset($data['error']) && is_string($data['error'])) {
+		if ( is_array( $data ) && isset( $data['error'] ) && is_string( $data['error'] ) ) {
 			$message = $data['error'];
 		}
-		if ($message === '') {
+		if ( $message === '' ) {
 			$message = sprintf(
 				/* translators: 1: HTTP status code, 2: operation label. */
-				__('Scene Shift API request "%2$s" failed with status %1$d.', 'scene-shift-ai-assistant'),
+				__( 'Scene Shift API request "%2$s" failed with status %1$d.', 'scene-shift-ai-assistant' ),
 				$status,
 				$operation,
 			);
 		}
-		return new \WP_Error('scene_shift_api_error', $message, [
-			'status' => $status,
-			'operation' => $operation,
-		]);
+		return new \WP_Error(
+			'scene_shift_api_error',
+			$message,
+			[
+				'status' => $status,
+				'operation' => $operation,
+			]
+		);
 	}
 }
