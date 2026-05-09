@@ -120,7 +120,7 @@ final class AdminPage {
 						sprintf(
 							/* translators: %s: portal URL wrapped in a <code> element */
 							__( 'Open the WordPress install page in the Scene Shift portal at %s.', 'scene-shift-ai-assistant' ),
-							'<code>https://login.sceneshift.org/install/wordpress</code>'
+							'<code>' . esc_html( rtrim( SCENE_SHIFT_AI_ASSISTANT_PORTAL_BASE, '/' ) . '/install/wordpress' ) . '</code>'
 						),
 						[ 'code' => [] ]
 					);

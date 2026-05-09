@@ -123,7 +123,18 @@ final class PortalClient {
 		$body = wp_remote_retrieve_body( $response );
 		$data = $body !== '' ? json_decode( $body, true ) : null;
 		if ( $status >= 200 && $status < 300 ) {
-			return is_array( $data ) ? $data : [];
+			if ( is_array( $data ) ) {
+				return $data;
+			}
+			return new \WP_Error(
+				'scene_shift_invalid_response',
+				__( 'Scene Shift returned an invalid API response. Please download the latest plugin from the same portal environment where you generated the setup code.', 'scene-shift-ai-assistant' ),
+				[
+					'status' => $status,
+					'operation' => $operation,
+					'content_type' => (string) wp_remote_retrieve_header( $response, 'content-type' ),
+				]
+			);
 		}
 		$message = '';
 		if ( is_array( $data ) && isset( $data['error'] ) && is_string( $data['error'] ) ) {

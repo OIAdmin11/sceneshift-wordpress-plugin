@@ -28,7 +28,12 @@ define( 'SCENE_SHIFT_AI_ASSISTANT_FILE', __FILE__ );
 define( 'SCENE_SHIFT_AI_ASSISTANT_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SCENE_SHIFT_AI_ASSISTANT_URL', plugin_dir_url( __FILE__ ) );
 define( 'SCENE_SHIFT_AI_ASSISTANT_OPTION_KEY', 'scene_shift_ai_assistant_settings' );
-define( 'SCENE_SHIFT_AI_ASSISTANT_API_BASE', 'https://login.sceneshift.org' );
+if ( ! defined( 'SCENE_SHIFT_AI_ASSISTANT_API_BASE' ) ) {
+	define( 'SCENE_SHIFT_AI_ASSISTANT_API_BASE', 'https://login.sceneshift.org' );
+}
+if ( ! defined( 'SCENE_SHIFT_AI_ASSISTANT_PORTAL_BASE' ) ) {
+	define( 'SCENE_SHIFT_AI_ASSISTANT_PORTAL_BASE', 'https://login.sceneshift.org' );
+}
 
 require_once SCENE_SHIFT_AI_ASSISTANT_DIR . 'includes/class-portal-client.php';
 require_once SCENE_SHIFT_AI_ASSISTANT_DIR . 'includes/class-settings-store.php';
